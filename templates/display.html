@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Antrian Digital - Display TV</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a1628;color:#fff;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;height:100vh}
+.container{display:flex;height:100vh;gap:0}
+.current-panel{flex:2;background:linear-gradient(135deg,#0f2347,#1a3a6b);display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid rgba(255,255,255,.1)}
+.current-panel .label{font-size:2.5vw;color:#7a9cc6;text-transform:uppercase;letter-spacing:3px;margin-bottom:1vh}
+.current-panel .number{font-size:18vw;font-weight:900;color:#00d4ff;text-shadow:0 0 60px rgba(0,212,255,.5);line-height:1}
+.current-panel .name{font-size:4vw;color:#fff;margin-top:1vh}
+.current-panel .purpose{font-size:2vw;color:#7a9cc6;margin-top:.5vh}
+.current-panel .empty-state{color:#3a5a8c;font-size:3vw}
+.queue-panel{flex:1.2;background:#0a1628;display:flex;flex-direction:column;padding:2vh 1.5vw}
+.queue-panel h2{font-size:2.5vw;color:#7a9cc6;padding-bottom:1.5vh;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:1.5vh;letter-spacing:2px}
+.queue-list{flex:1;overflow-y:auto}
+.queue-item{display:flex;align-items:center;padding:1.5vh 1vw;margin-bottom:.5vh;border-radius:8px;background:rgba(255,255,255,.03);transition:all .3s;gap:1vw}
+.queue-item.dipanggil{background:rgba(0,212,255,.15);animation:pulse 1s infinite}
+.queue-num{font-size:3vw;font-weight:900;color:#00d4ff;min-width:8vw;text-align:center}
+.queue-name{font-size:2vw;flex:1}
+.queue-purpose{font-size:1.5vw;color:#7a9cc6}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.footer{position:absolute;bottom:2vh;left:2vw;font-size:1.3vw;color:#3a5a8c}
+.btn-test{position:absolute;bottom:1.5vh;right:2vw;background:rgba(255,255,255,.1);color:#7a9cc6;border:1px solid rgba(255,255,255,.2);padding:1vh 2vw;border-radius:6px;cursor:pointer;font-size:1.2vw}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="current-panel" id="currentPanel">
+        <div class="label">⚡ SEDANG DIPANGGIL</div>
+        <div class="empty-state" id="emptyState">MENUNGGU ANTRIAN</div>
+        <div id="currentInfo" style="display:none">
+            <div class="number" id="currentNumber">---</div>
+            <div class="name" id="currentName"></div>
+            <div class="purpose" id="currentPurpose"></div>
+        </div>
+    </div>
+    <div class="queue-panel">
+        <h2>📋 DAFTAR ANTRIAN</h2>
+        <div class="queue-list" id="queueList"></div>
+    </div>
+</div>
+<div class="footer" id="footer">Antrian Digital v1.0</div>
+<button class="btn-test" onclick="testSuara()">🔊 Tes Suara</button>
+
+<script>
+let lastState = {queue:[], counter:0};
+
+// Gunakan SSE (push real-time) — fallback ke polling + auto-reload jika gagal
+function connectSSE(){
+    try {
+        let source = new EventSource('/api/sse');
+        source.onmessage = function(e){
+            let d = JSON.parse(e.data);
+            render(d);
+            detectPlay(d);
+            lastState = d;
+        };
+        source.onerror = function(){
+            source.close();
+            // Fallback: polling + auto-reload tiap 15 detik (TV friendly)
+            setInterval(function(){ location.reload(); }, 15000);
+            load();
+            setInterval(load, 3000);
+        };
+    } catch(e){
+        setInterval(function(){ location.reload(); }, 15000);
+        load();
+        setInterval(load, 3000);
+    }
+}
+
+function detectPlay(d){
+    let called = d.queue.filter(q=>q.status==='dipanggil');
+    if(called.length > 0){
+        let latest = called[called.length-1];
+        let prev = (lastState.queue || []).filter(q=>q.status==='dipanggil');
+        let prevItem = prev.length > 0 ? prev[prev.length-1] : null;
+        let isNewCall = !prevItem || prevItem.nomor !== latest.nomor;
+        let isReplay = prevItem && prevItem.nomor === latest.nomor && (latest.replay || 0) > (prevItem.replay || 0);
+        if(isNewCall || isReplay) playSuara(latest.nomor, latest.nama);
+    }
+}
+
+async function load(){
+    try {
+        let r = await fetch('/api/status');
+        let d = await r.json();
+        render(d);
+        detectPlay(d);
+        lastState = d;
+    } catch(e) {}
+}
+
+function testSuara(){
+    let audio = new Audio('/api/suara?nomor=TES');
+    audio.play().catch(e => alert('Gagal putar suara. Pastikan server jalan.'));
+}
+
+function playSuara(nomor, nama=''){
+    let url = `/api/suara?nomor=${nomor}&v=${Date.now()}`;
+    if(nama) url += `&nama=${encodeURIComponent(nama)}`;
+    let audio = new Audio(url);
+    audio.volume = 1.0;
+    audio.play().catch(e => console.log('Audio play:', e));
+}
+
+function speak(nomor, nama){ playSuara(nomor, nama); }
+
+function render(d){
+    let es = document.getElementById('emptyState');
+    let ci = document.getElementById('currentInfo');
+    
+    if(d.queue.length === 0){
+        es.style.display = 'block';
+        ci.style.display = 'none';
+    } else {
+        let called = d.queue.filter(q=>q.status==='dipanggil');
+        if(called.length>0){
+            es.style.display = 'none';
+            ci.style.display = 'block';
+            let c = called[called.length-1];
+            document.getElementById('currentNumber').textContent = c.nomor;
+            document.getElementById('currentName').textContent = c.nama;
+            document.getElementById('currentPurpose').textContent = c.keperluan;
+        } else {
+            es.textContent = 'MENUNGGU PANGGILAN';
+            es.style.display = 'block';
+            ci.style.display = 'none';
+        }
+    }
+
+    let ql = document.getElementById('queueList');
+    let html = '';
+    d.queue.forEach((q,i)=>{
+        let cls = q.status==='dipanggil'?'dipanggil':'';
+        html += `<div class="queue-item ${cls}">
+            <div class="queue-num">${q.nomor}</div>
+            <div class="queue-name">${q.nama}</div>
+            <div class="queue-purpose">${q.keperluan}</div>
+        </div>`;
+    });
+    if(d.queue.length===0) html = '<div style="text-align:center;color:#3a5a8c;padding:5vh;font-size:2vw">Antrian kosong</div>';
+    ql.innerHTML = html;
+
+    document.getElementById('footer').textContent = 
+        `Total: ${d.counter} antrian | ${new Date().toLocaleTimeString('id-ID')}`;
+}
+
+connectSSE();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+cache_suara/
+queue_data.json
+*.bat

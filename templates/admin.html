@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Operator - Antrian</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#fff;font-family:'Segoe UI',Arial,sans-serif;min-height:100vh}
+.header{background:linear-gradient(135deg,#16213e,#0f3460);padding:2vh 4vw;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:3.5vw}
+.btn{background:#00d4ff;color:#0a1628;border:none;padding:1.5vh 3vw;border-radius:8px;font-size:2.2vw;font-weight:700;cursor:pointer;transition:.2s}
+.btn:hover{transform:scale(1.03);opacity:.9}
+.btn.danger{background:#e74c3c;color:#fff}
+.btn.warning{background:#f39c12;color:#fff}
+.btn.success{background:#2ecc71;color:#fff}
+.main{padding:2vh 4vw}
+.queue-grid{display:grid;grid-template-columns:1fr;gap:1vh}
+.queue-card{background:rgba(255,255,255,.05);border-radius:10px;padding:2vh 3vw;display:flex;align-items:center;gap:3vw;transition:.2s}
+.queue-card.dipanggil{background:rgba(0,212,255,.2);border:1px solid #00d4ff}
+.queue-card .num{font-size:5vw;font-weight:900;color:#00d4ff;min-width:10vw;text-align:center}
+.queue-card .info{flex:1}
+.queue-card .info .nama{font-size:3vw;font-weight:600}
+.queue-card .info .keperluan{font-size:2vw;color:#aaa}
+.queue-card .info .status{font-size:1.8vw;color:#00d4ff;margin-top:.5vh}
+.queue-card .actions{display:flex;gap:1vw}
+.queue-card .actions button{font-size:2vw;padding:1vh 2vw;border:none;border-radius:6px;cursor:pointer;font-weight:600}
+.btn-call{background:#00d4ff;color:#0a1628}
+.btn-done{background:#2ecc71;color:#fff}
+.btn-skip{background:#f39c12;color:#fff}
+.btn-recall{background:rgba(255,255,255,.15);color:#00d4ff;border:1px solid #00d4ff}
+.empty{text-align:center;color:#555;padding:8vh;font-size:3vw}
+.stats{display:flex;gap:3vw;margin-bottom:2vh}
+.stat{background:rgba(255,255,255,.05);padding:1.5vh 3vw;border-radius:8px;text-align:center}
+.stat .val{font-size:3vw;font-weight:700;color:#00d4ff}
+.stat .lbl{font-size:1.5vw;color:#aaa}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>⚡ Panel Operator</h1>
+    <div style="display:flex;gap:2vw">
+        <button class="btn danger" onclick="reset()">🔄 Reset</button>
+        <button class="btn warning" onclick="clearCache()" style="background:#f39c12;color:#fff">🗑️ Clear Suara</button>
+        <label style="display:flex;align-items:center;gap:0.5vw;color:#00d4ff;font-size:2vw;cursor:pointer;background:rgba(0,212,255,.1);padding:1vh 2vw;border-radius:8px">
+            <input type="checkbox" id="panggilNama" style="width:3vw;height:3vw;cursor:pointer"> Panggil dengan Nama
+        </label>
+        <button class="btn" onclick="window.open('/display')">📺 BUKA DISPLAY TV</button>
+    </div>
+</div>
+<div class="main">
+    <div class="stats">
+        <div class="stat"><div class="val" id="totalAntrian">0</div><div class="lbl">Total</div></div>
+        <div class="stat"><div class="val" id="menunggu">0</div><div class="lbl">Menunggu</div></div>
+        <div class="stat"><div class="val" id="selesai">0</div><div class="lbl">Selesai</div></div>
+    </div>
+    <div class="queue-grid" id="queueGrid"></div>
+</div>
+
+<script>
+async function load(){
+    let r = await fetch('/api/status');
+    let d = await r.json();
+    render(d);
+}
+
+function render(d){
+    document.getElementById('totalAntrian').textContent = d.counter;
+    let menunggu = d.queue.filter(q=>q.status==='menunggu').length;
+    document.getElementById('menunggu').textContent = menunggu;
+    document.getElementById('selesai').textContent = d.history.length;
+
+    let grid = document.getElementById('queueGrid');
+    if(d.queue.length===0){
+        grid.innerHTML = '<div class="empty">Antrian kosong — arahkan pasien scan QR code</div>';
+        return;
+    }
+    grid.innerHTML = d.queue.map((q,i)=>{
+        let cls = q.status==='dipanggil'?'dipanggil':'';
+        let actions = '';
+        if(q.status==='menunggu'){
+            actions = `
+                <button class="btn-call" onclick="panggil(${i})">📢 PANGGIL</button>
+                <button class="btn-skip" onclick="skip(${i})">Lewati</button>`;
+        } else if(q.status==='dipanggil'){
+            actions = `
+                <button class="btn-recall" onclick="panggilUlang(${i})">🔊 Panggil Ulang</button>
+                <button class="btn-done" onclick="selesai(${i})">✅ SELESAI</button>`;
+        }
+        return `<div class="queue-card ${cls}">
+            <div class="num">${q.nomor}</div>
+            <div class="info">
+                <div class="nama">${q.nama}</div>
+                <div class="keperluan">${q.keperluan}</div>
+                <div class="status">${q.status.toUpperCase()}</div>
+            </div>
+            <div class="actions">${actions}</div>
+        </div>`;
+    }).join('');
+}
+
+async function panggil(i){
+    await fetch('/api/panggil',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})});
+    load();
+}
+
+function panggilUlang(i){
+    fetch('/api/status').then(r=>r.json()).then(d=>{
+        if(i < d.queue.length && d.queue[i].status==='dipanggil'){
+            fetch('/api/replay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})});
+        }
+    });
+}
+
+async function skip(i){
+    if(!confirm('Lewati antrian ini?')) return;
+    await fetch('/api/skip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})});
+    load();
+}
+
+async function selesai(i){
+    await fetch('/api/selesai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})});
+    load();
+}
+
+async function reset(){
+    if(!confirm('RESET SEMUA ANTRIAN?')) return;
+    await fetch('/api/reset',{method:'POST'});
+    load();
+}
+
+function clearCache(){
+    if(!confirm('Hapus semua cache suara?')) return;
+    fetch('/api/clearcache',{method:'POST'}).then(()=>alert('Cache suara dibersihkan!'));
+}
+
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Antrian Digital</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a1628;color:#fff;font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vh;padding:5vh}
+h1{font-size:5vw;text-align:center}
+h2{font-size:3vw;color:#7a9cc6;text-align:center}
+.qrcode{background:#fff;padding:3vh;border-radius:20px}
+.qrcode img{width:40vw;max-width:280px}
+.links{display:flex;gap:3vw;flex-wrap:wrap;justify-content:center;margin-top:2vh}
+.link{background:rgba(255,255,255,.05);padding:3vh 4vw;border-radius:12px;text-align:center;text-decoration:none;color:#fff;transition:.2s;border:1px solid rgba(255,255,255,.1)}
+.link:hover{background:rgba(0,212,255,.15);border-color:#00d4ff}
+.link .icon{font-size:6vw}
+.link .label{font-size:2.5vw;margin-top:1vh}
+.ip{font-size:2vw;color:#3a5a8c;margin-top:2vh}
+</style>
+</head>
+<body>
+<h1>⚡ ANTRIAN DIGITAL</h1>
+<h2 style="font-size:2.5vw;color:#00d4ff;margin-top:-1vh">PLN ULP LABUAN</h2>
+<h2>Scan QR Code untuk ambil nomor antrian</h2>
+<div class="qrcode" id="qrcode">
+    <img src="data:image/svg+xml;base64,LOADING" alt="QR Code">
+</div>
+<div class="links">
+    <a href="/display" class="link">
+        <div class="icon">📺</div>
+        <div class="label">Display TV</div>
+    </a>
+    <a href="/admin" class="link">
+        <div class="icon">🎛️</div>
+        <div class="label">Panel Operator</div>
+    </a>
+    <a href="/ambil" class="link">
+        <div class="icon">📋</div>
+        <div class="label">Ambil Nomor</div>
+    </a>
+</div>
+<div class="ip">Server: {{ ip }}:5000</div>
+
+<script>
+// Generate QR code client-side for the ambil URL
+let url = window.location.origin + '/ambil';
+let qr = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(url);
+document.getElementById('qrcode').innerHTML = '<img src="' + qr + '" alt="QR Code" style="width:40vw;max-width:280px">';
+</script>
+</body>
+</html>
